@@ -15,7 +15,7 @@ interface StatCard {
   value: number;
   change?: string;
   changeType?: 'positive' | 'urgent' | 'active' | 'percentage';
-  icon: string;
+  icon?: string;
 }
 
 interface AnalyticsData {
@@ -39,30 +39,18 @@ interface AnalyticsData {
   thisWeek: number;
 }
 
-// Mock data for immediate rendering
-const MOCK_ANALYTICS: AnalyticsData = {
-  weeklyTrend: [
-    { day: 'Mon', submitted: 4, resolved: 2 },
-    { day: 'Tue', submitted: 6, resolved: 3 },
-    { day: 'Wed', submitted: 5, resolved: 4 },
-    { day: 'Thu', submitted: 8, resolved: 5 },
-    { day: 'Fri', submitted: 7, resolved: 6 },
-    { day: 'Sat', submitted: 3, resolved: 2 },
-    { day: 'Sun', submitted: 2, resolved: 1 },
-  ],
-  statusDistribution: [
-    { name: 'Pending', value: 2, color: '#FCD34D' },
-    { name: 'In Progress', value: 2, color: '#06B6D4' },
-    { name: 'Resolved', value: 1, color: '#10B981' },
-  ],
-  totalReports: 5,
-  pendingReviews: 2,
-  inProgress: 2,
-  resolved: 1,
+// Initial empty state - no mock data
+const EMPTY_ANALYTICS: AnalyticsData = {
+  weeklyTrend: [],
+  statusDistribution: [],
+  totalReports: 0,
+  pendingReviews: 0,
+  inProgress: 0,
+  resolved: 0,
   rejected: 0,
-  activeCitizens: 1234,
-  avgResponseTime: '2.3 hours',
-  thisWeek: 2,
+  activeCitizens: 0,
+  avgResponseTime: '0 hours',
+  thisWeek: 0,
 };
 
 export default function AdminDashboard() {
@@ -73,11 +61,15 @@ export default function AdminDashboard() {
     role: 'administrator',
   });
 
-  const [analytics, setAnalytics] = useState<AnalyticsData>(MOCK_ANALYTICS);
-  const [loading, setLoading] = useState(false);
+  const [analytics, setAnalytics] = useState<AnalyticsData>(EMPTY_ANALYTICS);
+  const [loading, setLoading] = useState(true);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
+    // Mark component as mounted on client
+    setIsMounted(true);
+
     const userStr = localStorage.getItem('user');
     if (userStr) {
       try {
@@ -178,14 +170,13 @@ export default function AdminDashboard() {
 
     return (
       <div className={`bg-gradient-to-br ${getBgColor()} rounded-3xl shadow-md p-6 hover:shadow-lg transition-shadow`}>
-        <div className="flex items-start justify-between mb-4">
-          <div className="text-4xl">{icon}</div>
-          {change && (
+        {change && (
+          <div className="flex items-start justify-between mb-4">
             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getChangeColor()}`}>
               {change}
             </span>
-          )}
-        </div>
+          </div>
+        )}
         <p className="text-gray-600 text-sm font-medium mb-2">{label}</p>
         <p className="text-3xl font-bold text-slate-900">{value}</p>
       </div>
@@ -402,6 +393,17 @@ export default function AdminDashboard() {
 
         {/* Page Content */}
         <div className="p-6 sm:p-8">
+          {isMounted && loading ? (
+            <div className="flex items-center justify-center min-h-[500px]">
+              <div className="text-center">
+                <div className="inline-flex items-center justify-center mb-4">
+                  <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+                <p className="text-gray-600 font-medium">Loading analytics data...</p>
+              </div>
+            </div>
+          ) : (
+            <>
           {/* Key Metrics - Primary Row */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
             <StatCard
@@ -409,35 +411,30 @@ export default function AdminDashboard() {
               value={analytics.totalReports}
               change={`+${analytics.thisWeek} this week`}
               changeType="positive"
-              icon="List"
             />
             <StatCard
               label="Pending Review"
               value={analytics.pendingReviews}
               change="Urgent"
               changeType="urgent"
-              icon="Clock"
             />
             <StatCard
               label="In Progress"
               value={analytics.inProgress}
               change="Active"
               changeType="active"
-              icon="Wave"
             />
             <StatCard
               label="Resolved"
               value={analytics.resolved}
               change="20%"
               changeType="percentage"
-              icon="Check"
             />
             <StatCard
               label="Rejected"
               value={analytics.rejected}
               change={analytics.rejected > 0 ? `${analytics.rejected} issues` : 'None'}
               changeType="urgent"
-              icon="X"
             />
           </div>
 
@@ -465,56 +462,127 @@ export default function AdminDashboard() {
                 <h2 className="text-xl font-bold text-slate-900">Weekly Trend</h2>
                 <p className="text-sm text-gray-500 mt-1">Reports submitted vs resolved</p>
               </div>
-              {/* Simple SVG Area Chart */}
-              <svg width="100%" height="300" viewBox="0 0 500 250" className="mb-4">
-                {/* Grid */}
-                <line x1="40" y1="220" x2="480" y2="220" stroke="#E5E7EB" strokeWidth="1" />
-                {/* Y-axis labels */}
-                <text x="30" y="225" fontSize="12" fill="#9CA3AF" textAnchor="end">0</text>
-                <text x="30" y="165" fontSize="12" fill="#9CA3AF" textAnchor="end">12</text>
-                <text x="30" y="105" fontSize="12" fill="#9CA3AF" textAnchor="end">24</text>
-                
-                {/* Area chart for submitted */}
-                <polyline 
-                  points="50,180 100,160 150,170 200,140 250,150 300,200 350,210 400,220"
-                  fill="none"
-                  stroke="#06B6D4"
-                  strokeWidth="2"
-                />
-                <polyline 
-                  points="50,180 100,160 150,170 200,140 250,150 300,200 350,210 400,220 400,220 350,220 300,220 250,220 200,220 150,220 100,220 50,220"
-                  fill="url(#areaGradient)"
-                />
-                
-                {/* Defs for gradient */}
-                <defs>
-                  <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor="#06B6D4" stopOpacity="0.3" />
-                    <stop offset="100%" stopColor="#06B6D4" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                
-                {/* X-axis labels */}
-                <text x="50" y="240" fontSize="12" fill="#9CA3AF" textAnchor="middle">Mon</text>
-                <text x="100" y="240" fontSize="12" fill="#9CA3AF" textAnchor="middle">Tue</text>
-                <text x="150" y="240" fontSize="12" fill="#9CA3AF" textAnchor="middle">Wed</text>
-                <text x="200" y="240" fontSize="12" fill="#9CA3AF" textAnchor="middle">Thu</text>
-                <text x="250" y="240" fontSize="12" fill="#9CA3AF" textAnchor="middle">Fri</text>
-                <text x="300" y="240" fontSize="12" fill="#9CA3AF" textAnchor="middle">Sat</text>
-                <text x="400" y="240" fontSize="12" fill="#9CA3AF" textAnchor="middle">Sun</text>
-              </svg>
-              
-              {/* Legend */}
-              <div className="flex gap-6 mt-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-cyan-500 rounded-full"></div>
-                  <span className="text-sm text-gray-700">Submitted</span>
+              {/* Dynamic SVG Area Chart */}
+              {analytics.weeklyTrend && analytics.weeklyTrend.length > 0 ? (
+                <>
+                  <svg width="100%" height="300" viewBox="0 0 500 250" className="mb-4">
+                    {/* Grid lines */}
+                    <line x1="40" y1="220" x2="480" y2="220" stroke="#E5E7EB" strokeWidth="1" />
+                    
+                    {/* Y-axis labels */}
+                    <text x="30" y="225" fontSize="12" fill="#9CA3AF" textAnchor="end">0</text>
+                    <text x="30" y="165" fontSize="12" fill="#9CA3AF" textAnchor="end">12</text>
+                    <text x="30" y="105" fontSize="12" fill="#9CA3AF" textAnchor="end">24</text>
+                    
+                    {(() => {
+                      // Calculate max value for scaling
+                      const maxValue = Math.max(
+                        ...analytics.weeklyTrend.map(d => Math.max(d.submitted, d.resolved || 0)),
+                        24 // Min scale
+                      );
+                      
+                      // Calculate points for both lines
+                      const chartWidth = 440; // x: 40 to 480
+                      const chartHeight = 220; // y: 0 to 220
+                      const pointSpacing = chartWidth / (analytics.weeklyTrend.length - 1 || 1);
+                      
+                      const submittedPoints = analytics.weeklyTrend
+                        .map((d, i) => {
+                          const x = 40 + (i * pointSpacing);
+                          const y = 220 - (d.submitted / maxValue) * chartHeight;
+                          return `${x},${y}`;
+                        })
+                        .join(' ');
+                      
+                      const resolvedPoints = analytics.weeklyTrend
+                        .map((d, i) => {
+                          const x = 40 + (i * pointSpacing);
+                          const y = 220 - ((d.resolved || 0) / maxValue) * chartHeight;
+                          return `${x},${y}`;
+                        })
+                        .join(' ');
+                      
+                      // Create closed paths for filled areas
+                      const submittedArea = submittedPoints + ' 480,220 40,220';
+                      const resolvedArea = resolvedPoints + ' 480,220 40,220';
+                      
+                      return (
+                        <>
+                          {/* Defs for gradients */}
+                          <defs>
+                            <linearGradient id="submittedGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                              <stop offset="0%" stopColor="#06B6D4" stopOpacity="0.3" />
+                              <stop offset="100%" stopColor="#06B6D4" stopOpacity="0" />
+                            </linearGradient>
+                            <linearGradient id="resolvedGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                              <stop offset="0%" stopColor="#10B981" stopOpacity="0.3" />
+                              <stop offset="100%" stopColor="#10B981" stopOpacity="0" />
+                            </linearGradient>
+                          </defs>
+                          
+                          {/* Area fills */}
+                          <polyline 
+                            points={submittedArea}
+                            fill="url(#submittedGradient)"
+                          />
+                          <polyline 
+                            points={resolvedArea}
+                            fill="url(#resolvedGradient)"
+                          />
+                          
+                          {/* Lines */}
+                          <polyline 
+                            points={submittedPoints}
+                            fill="none"
+                            stroke="#06B6D4"
+                            strokeWidth="2"
+                            strokeLinejoin="round"
+                            strokeLinecap="round"
+                          />
+                          <polyline 
+                            points={resolvedPoints}
+                            fill="none"
+                            stroke="#10B981"
+                            strokeWidth="2"
+                            strokeLinejoin="round"
+                            strokeLinecap="round"
+                          />
+                          
+                          {/* X-axis labels */}
+                          {analytics.weeklyTrend.map((day, i) => (
+                            <text 
+                              key={day.day}
+                              x={40 + (i * pointSpacing)} 
+                              y="240" 
+                              fontSize="12" 
+                              fill="#9CA3AF" 
+                              textAnchor="middle"
+                            >
+                              {day.day}
+                            </text>
+                          ))}
+                        </>
+                      );
+                    })()}
+                  </svg>
+                  
+                  {/* Legend */}
+                  <div className="flex gap-6 mt-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-cyan-500 rounded-full"></div>
+                      <span className="text-sm text-gray-700">Submitted</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
+                      <span className="text-sm text-gray-700">Resolved</span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="w-full h-72 flex items-center justify-center bg-gray-50 rounded-lg">
+                  <p className="text-gray-500 text-sm">No trend data available</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
-                  <span className="text-sm text-gray-700">Resolved</span>
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Status Distribution Chart */}
@@ -526,46 +594,45 @@ export default function AdminDashboard() {
               
               {/* Simple Pie Chart using SVG */}
               <div className="flex items-center justify-center mb-6">
-                <svg width="250" height="250" viewBox="0 0 200 200">
-                  {/* Background circle */}
-                  <circle cx="100" cy="100" r="90" fill="none" stroke="#E5E7EB" strokeWidth="40" />
-                  
-                  {/* Pending slice (45%) - yellow */}
-                  <circle 
-                    cx="100" 
-                    cy="100" 
-                    r="70" 
-                    fill="none" 
-                    stroke="#FCD34D" 
-                    strokeWidth="40"
-                    strokeDasharray={`${70 * 2 * Math.PI * 0.45} ${70 * 2 * Math.PI}`}
-                    transform="rotate(-90 100 100)"
-                  />
-                  
-                  {/* In Progress slice (40%) - cyan */}
-                  <circle 
-                    cx="100" 
-                    cy="100" 
-                    r="70" 
-                    fill="none" 
-                    stroke="#06B6D4" 
-                    strokeWidth="40"
-                    strokeDasharray={`${70 * 2 * Math.PI * 0.40} ${70 * 2 * Math.PI}`}
-                    transform={`rotate(${162 - 90} 100 100)`}
-                  />
-                  
-                  {/* Resolved slice (15%) - green */}
-                  <circle 
-                    cx="100" 
-                    cy="100" 
-                    r="70" 
-                    fill="none" 
-                    stroke="#10B981" 
-                    strokeWidth="40"
-                    strokeDasharray={`${70 * 2 * Math.PI * 0.15} ${70 * 2 * Math.PI}`}
-                    transform={`rotate(${234 - 90} 100 100)`}
-                  />
-                </svg>
+                {analytics.statusDistribution.length > 0 ? (
+                  <svg width="250" height="250" viewBox="0 0 200 200">
+                    {/* Background circle */}
+                    <circle cx="100" cy="100" r="90" fill="none" stroke="#E5E7EB" strokeWidth="40" />
+                    
+                    {(() => {
+                      const total = analytics.statusDistribution.reduce((sum, item) => sum + item.value, 0);
+                      let currentAngle = -90;
+                      
+                      return analytics.statusDistribution.map((item, index) => {
+                        const percentage = total > 0 ? item.value / total : 0;
+                        const circumference = 70 * 2 * Math.PI;
+                        const strokeDasharray = circumference * percentage;
+                        const sliceAngle = 360 * percentage;
+                        
+                        const slice = (
+                          <circle
+                            key={item.name}
+                            cx="100"
+                            cy="100"
+                            r="70"
+                            fill="none"
+                            stroke={item.color}
+                            strokeWidth="40"
+                            strokeDasharray={`${strokeDasharray} ${circumference}`}
+                            transform={`rotate(${currentAngle} 100 100)`}
+                          />
+                        );
+                        
+                        currentAngle += sliceAngle;
+                        return slice;
+                      });
+                    })()}
+                  </svg>
+                ) : (
+                  <div className="w-64 h-64 flex items-center justify-center bg-gray-50 rounded-full">
+                    <p className="text-gray-500 text-sm">No data available</p>
+                  </div>
+                )}
               </div>
               
               {/* Custom Legend */}
@@ -583,6 +650,8 @@ export default function AdminDashboard() {
               </div>
             </div>
           </div>
+            </>
+          )}
         </div>
       </main>
     </div>

@@ -44,7 +44,6 @@ export default function ManageIssuesPage() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [statusMessages, setStatusMessages] = useState<{ [key: string]: { type: 'success' | 'error'; text: string } }>({});
 
@@ -77,8 +76,9 @@ export default function ManageIssuesPage() {
       }
     }
 
-    // Always fetch reports when component mounts or when returning from navigation
-    fetchReports(!hasLoadedOnce);
+    // Always fetch reports when component mounts
+    // This ensures we get fresh data when returning from the detail page
+    fetchReports(true);
   }, []);
 
   // Filter reports based on search and filters
@@ -122,7 +122,6 @@ export default function ManageIssuesPage() {
       if (response.data.status === 'success') {
         const reportsData = response.data.data || [];
         setReports(reportsData);
-        setHasLoadedOnce(true);
       }
     } catch (error) {
       console.error('Error fetching reports:', error);
@@ -481,7 +480,7 @@ export default function ManageIssuesPage() {
                   <p>Loading issues...</p>
                 </div>
               </div>
-            ) : reports.length === 0 && hasLoadedOnce ? (
+            ) : reports.length === 0 ? (
               <div className="p-12 text-center">
                 <AlertCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-600 font-medium">No issues found</p>
