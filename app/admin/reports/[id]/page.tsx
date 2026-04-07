@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import { ArrowLeft, Eye, AlertCircle } from 'lucide-react';
 
@@ -36,6 +37,7 @@ interface UserProfile {
 }
 
 export default function ReportDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const router = useRouter();
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -161,7 +163,7 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button
-                onClick={() => window.history.back()}
+                onClick={() => router.push('/admin/reports')}
                 className="p-2 hover:bg-gray-100 rounded-lg transition group"
               >
                 <ArrowLeft className="w-5 h-5 text-gray-600 group-hover:text-gray-900" />
@@ -196,7 +198,7 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Report Not Found</h2>
             <p className="text-gray-600 mb-8">{error || 'The report you are looking for does not exist.'}</p>
             <button
-              onClick={() => window.history.back()}
+              onClick={() => router.push('/admin/reports')}
               className="px-8 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium inline-flex items-center gap-2"
             >
               <ArrowLeft className="w-4 h-4" />
