@@ -6,10 +6,10 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { role } = await request.json();
-    const userId = params.id;
 
     if (!role || !['administrator', 'citizen'].includes(role)) {
       return NextResponse.json(
@@ -25,7 +25,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     const { data, error } = await supabase
       .from('users')
       .update({ role })
-      .eq('id', userId)
+      .eq('id', id)
       .select();
 
     if (error) {
