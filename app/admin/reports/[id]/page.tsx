@@ -50,6 +50,10 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
   });
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [comments, setComments] = useState<any[]>([]);
+  const [commentText, setCommentText] = useState('');
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [submittingComment, setSubmittingComment] = useState(false);
 
   useEffect(() => {
     const unwrapParams = async () => {
@@ -79,8 +83,24 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
   useEffect(() => {
     if (reportId) {
       fetchReportDetail();
+      fetchComments();
     }
   }, [reportId]);
+
+  const fetchComments = async () => {
+    if (!reportId) return;
+    try {
+      setLoadingComments(true);
+      const response = await axios.get(`/api/reports/${reportId}/comments`);
+      if (response.data.status === 'success') {
+        setComments(response.data.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching comments:', error);
+    } finally {
+      setLoadingComments(false);
+    }
+  };
 
   const fetchReportDetail = async () => {
     if (!reportId) return;
@@ -152,6 +172,37 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
       });
     } finally {
       setUpdatingStatus(false);
+    }
+  };
+
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reportId || !commentText.trim()) return;
+
+    try {
+      setSubmittingComment(true);
+      const response = await axios.post(`/api/reports/${reportId}/comments`, {
+        comment: commentText.trim(),
+        admin_id: userProfile.id,
+      });
+
+      if (response.data.status === 'success') {
+        setComments([...comments, response.data.data]);
+        setCommentText('');
+        setStatusMessage({
+          type: 'success',
+          text: 'Comment added successfully',
+        });
+        setTimeout(() => setStatusMessage(null), 3000);
+      }
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      setStatusMessage({
+        type: 'error',
+        text: 'Failed to add comment. Please try again.',
+      });
+    } finally {
+      setSubmittingComment(false);
     }
   };
 
@@ -389,6 +440,70 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
                 </div>
               </div>
             )}
+
+            {/* Comments Section */}
+            <div className="bg-white rounded-3xl shadow-md p-8">
+              <h3 className="text-2xl font-bold text-gray-900 mb-6">Resolution Notes</h3>
+              
+              {/* Add Comment Form */}
+              <form onSubmit={handleAddComment} className="mb-8">
+                <div className="space-y-4">
+                  <textarea
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    placeholder="Add a note about the resolution or updates..."
+                    disabled={submittingComment}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none resize-none disabled:opacity-50 disabled:cursor-not-allowed text-gray-900"
+                    rows={4}
+                  />
+                  <button
+                    type="submit"
+                    disabled={submittingComment || !commentText.trim()}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {submittingComment ? 'Posting...' : 'Post Note'}
+                  </button>
+                </div>
+              </form>
+
+              {/* Comments List */}
+              <div className="space-y-4">
+                {loadingComments ? (
+                  <div className="text-center py-8">
+                    <div className="inline-flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                      <p className="text-gray-600">Loading notes...</p>
+                    </div>
+                  </div>
+                ) : comments.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">No resolution notes yet. Add one above.</p>
+                  </div>
+                ) : (
+                  comments.map((comment) => (
+                    <div key={comment.id} className="border border-blue-200 bg-white p-4 rounded-lg">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <p className="font-semibold text-gray-900">
+                            {comment.admin?.name || 'Admin'}
+                          </p>
+                          <p className="text-xs text-gray-600">
+                            {new Date(comment.created_at).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-gray-800 whitespace-pre-wrap">{comment.comment}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
 
             {/* Action Buttons */}
             <div className="flex gap-4 pt-6">

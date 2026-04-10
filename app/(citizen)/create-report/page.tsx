@@ -18,6 +18,64 @@ interface ErrorNotification {
   message: string;
 }
 
+// Helper function to find best matching category - simplified for reliability
+function findBestMatchingCategory(
+  aiSuggestion: string,
+  categories: Array<{ id: string; name: string }>
+): { id: string; name: string } | undefined {
+  const suggestionLower = aiSuggestion.toLowerCase().trim();
+
+  // 1. Exact match (case-insensitive)
+  let match = categories.find(
+    cat => cat.name.toLowerCase() === suggestionLower
+  );
+  if (match) {
+    console.log('✅ Found exact match:', match.name);
+    return match;
+  }
+
+  // 2. Contains match
+  match = categories.find(
+    cat => suggestionLower.includes(cat.name.toLowerCase()) ||
+           cat.name.toLowerCase().includes(suggestionLower)
+  );
+  if (match) {
+    console.log('✅ Found contains match:', match.name);
+    return match;
+  }
+
+  // 3. Word match - split by common delimiters and check if any category contains the same words
+  const suggestionWords = suggestionLower.split(/[\s\/-]+/).filter(w => w.length > 2);
+  console.log('AI Suggestion words:', suggestionWords);
+  
+  let bestMatch: { id: string; name: string } | undefined = undefined;
+  let maxMatches = 0;
+
+  categories.forEach(cat => {
+    const catLower = cat.name.toLowerCase();
+    const catWords = catLower.split(/[\s\/-]+/).filter(w => w.length > 2);
+    
+    const matches = suggestionWords.filter(word =>
+      catWords.some(cw => cw === word || cw.includes(word) || word.includes(cw))
+    ).length;
+
+    if (matches > maxMatches) {
+      maxMatches = matches;
+      bestMatch = cat;
+      console.log(`Comparing "${suggestionWords.join(' ')}" with "${catWords.join(' ')}" = ${matches} matches`);
+    }
+  });
+
+  if (bestMatch) {
+    const matchName = (bestMatch as { id: string; name: string }).name;
+    console.log(`✅ Found word match: ${matchName} (${maxMatches} word(s))`);
+    return bestMatch;
+  }
+
+  console.warn('❌ No matching category found');
+  return undefined;
+}
+
 export default function CreateReportPage() {
   const [userProfile, setUserProfile] = useState({
     name: 'User',
@@ -43,6 +101,13 @@ export default function CreateReportPage() {
   const [notification, setNotification] = useState<ErrorNotification | null>(null);
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // AI suggestion state
+  const [aiSuggestion, setAiSuggestion] = useState<{
+    categoryName: string;
+    categoryId: string | null;
+    confidence: number;
+  } | null>(null);
 
   // Fetch user data from localStorage
   useEffect(() => {
@@ -113,6 +178,43 @@ export default function CreateReportPage() {
       setPreviewUrl(reader.result as string);
     };
     reader.readAsDataURL(file);
+
+    // Get AI suggestion from image immediately
+    analyzeImageForAI(file);
+  };
+
+  const analyzeImageForAI = async (file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const response = await axios.post('/api/reports/analyze-image', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (response.data.aiPrediction) {
+        const prediction = response.data.aiPrediction;
+        console.log('AI Suggestion received:', prediction);
+        console.log('Available categories:', categories);
+
+        // Set the suggestion regardless of matching - user can accept or select from dropdown
+        setAiSuggestion({
+          categoryName: prediction.predictedCategory,
+          categoryId: null, // Will be looked up when user clicks Accept
+          confidence: prediction.confidence,
+        });
+
+        showNotification(
+          'success',
+          `✨ AI detected: ${prediction.predictedCategory} (${Math.round(prediction.confidence * 100)}% confidence)`
+        );
+      }
+    } catch (error) {
+      console.error('Error analyzing image:', error);
+      // Don't show error - AI analysis is optional
+    }
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -575,27 +677,6 @@ export default function CreateReportPage() {
                 />
               </div>
 
-              {/* Category */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-900 mb-2">
-                  Category <span className="text-red-500">*</span>
-                </label>
-                <select
-                  name="category"
-                  value={formData.category}
-                  onChange={handleInputChange}
-                  disabled={isLoading}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all disabled:opacity-50"
-                >
-                  <option value="">Select a category</option>
-                  {categories.map(cat => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
               {/* Location with Google Maps */}
               <div className="col-span-1 md:col-span-2">
                 <label className="block text-sm font-semibold text-slate-900 mb-2">
@@ -672,6 +753,105 @@ export default function CreateReportPage() {
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Category */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-900 mb-2">
+                  Category <span className="text-red-500">*</span>
+                </label>
+
+                {/* AI Suggestion Card */}
+                {aiSuggestion && !formData.category && (
+                  <div className="mb-4 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-xl">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-slate-900 mb-1">
+                          ✨ AI Suggestion
+                        </p>
+                        <p className="text-emerald-700 font-semibold mb-3">
+                          {aiSuggestion.categoryName}
+                        </p>
+                        <p className="text-xs text-gray-600 mb-3">
+                          Confidence: {Math.round(aiSuggestion.confidence * 100)}%
+                        </p>
+                        <div className="space-y-3">
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                console.log('Accept clicked. aiSuggestion:', aiSuggestion);
+                                console.log('All available categories:', categories);
+                                const matchingCat = findBestMatchingCategory(aiSuggestion.categoryName, categories);
+                                console.log('Best match found:', matchingCat);
+                                
+                                if (matchingCat) {
+                                  console.log('✅ Setting category to:', matchingCat.id, matchingCat.name);
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    category: matchingCat.id,
+                                  }));
+                                  showNotification('success', `✅ Category set to: ${matchingCat.name}`);
+                                  setAiSuggestion(null);
+                                } else {
+                                  console.warn('❌ Could not find exact match for:', aiSuggestion.categoryName);
+                                  console.warn('Available categories:', categories.map(c => `"${c.name}" (${c.id})`));
+                                  // Show the dropdown with the AI suggestion name visible so user can manually select the matching category
+                                  showNotification('success', `💡 AI suggests: "${aiSuggestion.categoryName}". Please select the matching category from dropdown.`);
+                                }
+                              }}
+                              className="flex-1 py-2 px-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors font-medium text-sm"
+                            >
+                              Accept
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                console.log('Dismiss clicked - showing category dropdown');
+                                setAiSuggestion(null);
+                              }}
+                              className="flex-1 py-2 px-3 bg-white text-emerald-700 border border-emerald-300 rounded-lg hover:bg-emerald-50 transition-colors font-medium text-sm"
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                          <p className="text-xs text-gray-500">Or select from dropdown below:</p>
+                          <select
+                            name="category"
+                            value={formData.category}
+                            onChange={handleInputChange}
+                            disabled={isLoading}
+                            className="w-full px-4 py-3 bg-white border border-emerald-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all disabled:opacity-50"
+                          >
+                            <option value="">Select a category</option>
+                            {categories.map(cat => (
+                              <option key={cat.id} value={cat.id}>
+                                {cat.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {(!aiSuggestion || formData.category) && (
+                  <select
+                    name="category"
+                    value={formData.category}
+                    onChange={handleInputChange}
+                    disabled={isLoading}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all disabled:opacity-50"
+                  >
+                    <option value="">Select a category</option>
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               {/* Submit Button */}
