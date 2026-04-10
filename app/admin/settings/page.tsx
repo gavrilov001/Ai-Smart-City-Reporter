@@ -180,7 +180,7 @@ export default function SettingsPage() {
               </button>
 
               {showProfileMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                <div className="fixed md:absolute left-0 right-0 md:left-auto md:right-0 md:w-48 top-20 md:top-full md:mt-2 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50 mx-3 md:mx-0">
                   <div className="px-4 py-2 border-b border-gray-200">
                     <p className="font-medium text-slate-900">{userProfile.name}</p>
                     <p className="text-xs text-gray-500">{userProfile.role}</p>
