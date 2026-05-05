@@ -1,8 +1,12 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-// Use the default Resend domain for sending emails
+let resend: any;
 const fromEmail = 'onboarding@resend.dev';
+
+// Initialize Resend only on the server side
+if (process.env.RESEND_API_KEY) {
+  resend = new Resend(process.env.RESEND_API_KEY);
+}
 
 export async function sendVerificationEmail(
   email: string,
@@ -14,6 +18,11 @@ export async function sendVerificationEmail(
   const verificationLink = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}`;
 
   try {
+    if (!resend) {
+      console.error('Resend is not initialized. Check RESEND_API_KEY environment variable.');
+      throw new Error('Email service not configured');
+    }
+
     const result = await resend.emails.send({
       from: fromEmail,
       to: toEmail,
@@ -66,6 +75,11 @@ export async function sendPasswordResetEmail(
   const resetLink = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
 
   try {
+    if (!resend) {
+      console.error('Resend is not initialized. Check RESEND_API_KEY environment variable.');
+      throw new Error('Email service not configured');
+    }
+
     const result = await resend.emails.send({
       from: fromEmail,
       to: toEmail,
@@ -122,6 +136,11 @@ export async function sendWelcomeEmail(email: string, userName: string) {
   const toEmail = 'vlatko.gavrilov1@gmail.com';
   
   try {
+    if (!resend) {
+      console.error('Resend is not initialized. Check RESEND_API_KEY environment variable.');
+      throw new Error('Email service not configured');
+    }
+
     const result = await resend.emails.send({
       from: fromEmail,
       to: toEmail,
