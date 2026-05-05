@@ -63,10 +63,9 @@ export default function RegisterPage() {
         return;
       }
 
-      setMessage('Registration successful! Redirecting to login...');
-      setTimeout(() => {
-        window.location.href = '/login';
-      }, 1500);
+      setMessage('Registration successful! Check your email to verify your account. You can then log in.');
+      // Don't redirect, keep user on this page to see the message
+      setLoading(false);
     } catch (err) {
       console.error('Registration error:', err);
       setError(err instanceof Error ? err.message : 'An error occurred');

@@ -10,6 +10,7 @@ interface User {
   email: string;
   role: string;
   created_at: string;
+  email_verified?: boolean;
 }
 
 interface EditingUser {
@@ -17,6 +18,7 @@ interface EditingUser {
   name: string;
   email: string;
   role: string;
+  email_verified?: boolean;
 }
 
 export default function UserManagementPage() {
@@ -30,7 +32,7 @@ export default function UserManagementPage() {
   const [loading, setLoading] = useState(true);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [editingUser, setEditingUser] = useState<EditingUser | null>(null);
-  const [editingUserDetails, setEditingUserDetails] = useState<{ id: string; name: string; email: string } | null>(null);
+  const [editingUserDetails, setEditingUserDetails] = useState<{ id: string; name: string; email: string; email_verified?: boolean } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -114,7 +116,7 @@ export default function UserManagementPage() {
     }
   };
 
-  const handleUpdateUserDetails = async (userId: string, name: string, email: string) => {
+  const handleUpdateUserDetails = async (userId: string, name: string, email: string, email_verified?: boolean) => {
     try {
       setEditError(null);
       
@@ -129,11 +131,11 @@ export default function UserManagementPage() {
       }
 
       setUpdatingUserId(userId);
-      const response = await axios.put(`/api/users/${userId}`, { name, email });
+      const response = await axios.put(`/api/users/${userId}`, { name, email, email_verified });
       
       if (response.data.status === 'success') {
         setUsers(users.map(u => 
-          u.id === userId ? { ...u, name, email } : u
+          u.id === userId ? { ...u, name, email, email_verified } : u
         ));
         setEditingUserDetails(null);
         setSuccessMessage('User details updated successfully');
@@ -348,6 +350,7 @@ export default function UserManagementPage() {
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">User</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Email</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Role</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Email Verified</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Joined</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Actions</th>
                     </tr>
@@ -400,6 +403,15 @@ export default function UserManagementPage() {
                             </div>
                           )}
                         </td>
+                        <td className="px-6 py-4 text-sm">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            user.email_verified 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {user.email_verified ? '✓ Verified' : '○ Pending'}
+                          </span>
+                        </td>
                         <td className="px-6 py-4 text-sm text-gray-600">{new Date(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
@@ -447,7 +459,7 @@ export default function UserManagementPage() {
                                     value={editingUserDetails.name}
                                     onChange={(e) => setEditingUserDetails({ ...editingUserDetails, name: e.target.value })}
                                     placeholder="Enter full name"
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 placeholder-gray-400"
                                     disabled={updatingUserId === user.id}
                                   />
                                 </div>
@@ -458,14 +470,26 @@ export default function UserManagementPage() {
                                     value={editingUserDetails.email}
                                     onChange={(e) => setEditingUserDetails({ ...editingUserDetails, email: e.target.value })}
                                     placeholder="Enter email address"
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 placeholder-gray-400"
                                     disabled={updatingUserId === user.id}
                                   />
+                                </div>
+                                <div>
+                                  <label className="flex items-center gap-2 text-xs font-semibold text-gray-700">
+                                    <input
+                                      type="checkbox"
+                                      checked={editingUserDetails.email_verified || false}
+                                      onChange={(e) => setEditingUserDetails({ ...editingUserDetails, email_verified: e.target.checked })}
+                                      disabled={updatingUserId === user.id}
+                                      className="rounded border-gray-300"
+                                    />
+                                    Email Verified
+                                  </label>
                                 </div>
                               </div>
                               <div className="flex gap-2 mt-6">
                                 <button
-                                  onClick={() => handleUpdateUserDetails(user.id, editingUserDetails.name, editingUserDetails.email)}
+                                  onClick={() => handleUpdateUserDetails(user.id, editingUserDetails.name, editingUserDetails.email, editingUserDetails.email_verified)}
                                   disabled={updatingUserId === user.id}
                                   className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium transition"
                                 >
