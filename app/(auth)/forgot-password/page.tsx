@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
