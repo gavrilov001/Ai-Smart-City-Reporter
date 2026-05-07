@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { sendVerificationEmail } from '@/lib/email';
+import { generateToken, hashToken } from '@/lib/token';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -57,7 +59,11 @@ export async function POST(request: Request) {
     const userId = generateUUID();
     const passwordHash = hashPassword(password);
 
-    // Insert user into database
+    // Generate verification token
+    const { token: verificationToken, expiresAt: tokenExpiresAt } = generateToken();
+    const hashedToken = hashToken(verificationToken);
+
+    // Insert user into database with verification token
     const { data: newUser, error: insertError } = await supabase
       .from('users')
       .insert({
@@ -65,8 +71,11 @@ export async function POST(request: Request) {
         email,
         name,
         role: role || 'citizen',
+        email_verified: false,
+        verification_token: hashedToken,
+        verification_token_expires_at: new Date(tokenExpiresAt).toISOString(),
       })
-      .select('id, name, email, role')
+      .select('id, name, email, role, email_verified')
       .single();
 
     if (insertError) {
@@ -77,11 +86,19 @@ export async function POST(request: Request) {
       );
     }
 
-    console.log(`User ${email} registered successfully`);
+    // Send verification email
+    try {
+      await sendVerificationEmail(email, verificationToken, name);
+    } catch (emailError) {
+      console.error('Failed to send verification email:', emailError);
+      // Don't fail registration if email fails, but log it
+    }
+
+    console.log(`User ${email} registered successfully. Verification email sent.`);
 
     return NextResponse.json(
       {
-        message: 'Registration successful',
+        message: 'Registration successful! Please check your email to verify your account.',
         user: newUser,
       },
       { status: 201 }
