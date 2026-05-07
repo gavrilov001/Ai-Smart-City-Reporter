@@ -64,6 +64,7 @@ export async function POST(request: Request) {
         id: userId,
         email,
         name,
+        password: passwordHash,
         role: role || 'citizen',
       })
       .select('id, name, email, role')

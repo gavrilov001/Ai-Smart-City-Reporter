@@ -45,12 +45,25 @@ export default function ReportDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [comments, setComments] = useState<Array<{ text: string; timestamp: string }>>([]);
 
   useEffect(() => {
     fetchReport();
   }, [reportId]);
 
-  const fetchReport = async () => {
+  const loadComments = () => {
+    if (!reportId) return;
+    try {
+      const stored = localStorage.getItem(`report_comments_${reportId}`);
+      if (stored) {
+        setComments(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.error('Error loading comments:', e);
+    }
+  };
+
+      const fetchReport = async () => {
     try {
       setLoading(true);
       const response = await axios.get(`/api/reports`);
@@ -65,6 +78,8 @@ export default function ReportDetailPage() {
           if (foundReport.report_images && foundReport.report_images.length > 0) {
             setSelectedImage(foundReport.report_images[0].image_url);
           }
+          // Load comments after report is loaded
+          loadComments();
         } else {
           setError('Report not found');
         }
@@ -231,11 +246,37 @@ export default function ReportDetailPage() {
 
             {/* Description */}
             <div className="mb-8">
-              <h2 className="text-xl font-bold mb-3">Description</h2>
-              <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+              <h2 className="text-xl font-bold mb-3 text-gray-900">Description</h2>
+              <p className="text-gray-900 whitespace-pre-wrap leading-relaxed">
                 {report.description}
               </p>
             </div>
+
+            {/* Admin Comments Section */}
+            {comments.length > 0 && (
+              <div className="mb-8 p-6 bg-blue-50 rounded-lg border border-blue-200">
+                <h2 className="text-xl font-bold mb-4 text-gray-900">Admin Notes</h2>
+                <div className="space-y-4">
+                  {comments.map((comment, index) => (
+                    <div key={index} className="bg-white p-4 rounded-lg border border-blue-100">
+                      <div className="flex items-start justify-between mb-2">
+                        <span className="text-sm font-semibold text-blue-700">Administrator</span>
+                        <span className="text-xs text-gray-500">
+                          {new Date(comment.timestamp).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </div>
+                      <p className="text-gray-700 whitespace-pre-wrap">{comment.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Report Details Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">

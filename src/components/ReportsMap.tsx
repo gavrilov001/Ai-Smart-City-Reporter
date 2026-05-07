@@ -73,14 +73,15 @@ export default function ReportsMap() {
 
   const getMarkerIcon = (status: string) => {
     const color = getStatusColor(status);
-    return {
-      path: google.maps.SymbolPath.CIRCLE,
-      scale: 8,
-      fillColor: color,
-      fillOpacity: 0.8,
-      strokeColor: '#fff',
-      strokeWeight: 2,
-    };
+    // Create an SVG data URL for the marker
+    // This doesn't require google to be defined
+    const svg = encodeURIComponent(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+        <circle cx="20" cy="20" r="14" fill="${color}" stroke="white" stroke-width="2"/>
+      </svg>
+    `);
+    
+    return `data:image/svg+xml,${svg}`;
   };
 
   if (!apiKey || apiKey === 'YOUR_GOOGLE_MAPS_API_KEY_HERE') {

@@ -44,7 +44,6 @@ export default function ManageIssuesPage() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [statusMessages, setStatusMessages] = useState<{ [key: string]: { type: 'success' | 'error'; text: string } }>({});
 
@@ -77,8 +76,9 @@ export default function ManageIssuesPage() {
       }
     }
 
-    // Always fetch reports when component mounts or when returning from navigation
-    fetchReports(!hasLoadedOnce);
+    // Always fetch reports when component mounts
+    // This ensures we get fresh data when returning from the detail page
+    fetchReports(true);
   }, []);
 
   // Filter reports based on search and filters
@@ -122,7 +122,6 @@ export default function ManageIssuesPage() {
       if (response.data.status === 'success') {
         const reportsData = response.data.data || [];
         setReports(reportsData);
-        setHasLoadedOnce(true);
       }
     } catch (error) {
       console.error('Error fetching reports:', error);
@@ -287,6 +286,13 @@ export default function ManageIssuesPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 8.048M12 4.354L8.646 7.708m6.708 0L12 4.354m0 8.048l3.354 3.354m-6.708 0L5.646 12.402M12 20.5c-4.418 0-8-1.79-8-4s3.582-4 8-4 8 1.79 8 4-3.582 4-8 4z" />
             </svg>
             User Management
+          </a>
+
+          <a href="/admin/ai-assistant" className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg transition">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            AI Assistant
           </a>
         </nav>
 
@@ -481,7 +487,7 @@ export default function ManageIssuesPage() {
                   <p>Loading issues...</p>
                 </div>
               </div>
-            ) : reports.length === 0 && hasLoadedOnce ? (
+            ) : reports.length === 0 ? (
               <div className="p-12 text-center">
                 <AlertCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-600 font-medium">No issues found</p>

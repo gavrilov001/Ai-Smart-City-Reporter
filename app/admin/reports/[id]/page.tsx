@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import { ArrowLeft, Eye, AlertCircle } from 'lucide-react';
 
@@ -36,6 +37,7 @@ interface UserProfile {
 }
 
 export default function ReportDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const router = useRouter();
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -48,6 +50,8 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
   });
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [adminNote, setAdminNote] = useState('');
+  const [comments, setComments] = useState<Array<{ text: string; timestamp: string }>>([]);
 
   useEffect(() => {
     const unwrapParams = async () => {
@@ -77,8 +81,30 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
   useEffect(() => {
     if (reportId) {
       fetchReportDetail();
+      loadComments();
     }
   }, [reportId]);
+
+  const loadComments = () => {
+    if (!reportId) return;
+    try {
+      const stored = localStorage.getItem(`report_comments_${reportId}`);
+      if (stored) {
+        setComments(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.error('Error loading comments:', e);
+    }
+  };
+
+  const saveComments = (newComments: Array<{ text: string; timestamp: string }>) => {
+    if (!reportId) return;
+    try {
+      localStorage.setItem(`report_comments_${reportId}`, JSON.stringify(newComments));
+    } catch (e) {
+      console.error('Error saving comments:', e);
+    }
+  };
 
   const fetchReportDetail = async () => {
     if (!reportId) return;
@@ -153,6 +179,20 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
     }
   };
 
+  const handleAddComment = () => {
+    if (!adminNote.trim()) return;
+
+    const newComment = {
+      text: adminNote,
+      timestamp: new Date().toISOString(),
+    };
+
+    const updatedComments = [...comments, newComment];
+    setComments(updatedComments);
+    saveComments(updatedComments);
+    setAdminNote('');
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50">
       {/* Header */}
@@ -161,7 +201,7 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button
-                onClick={() => window.history.back()}
+                onClick={() => router.push('/admin/reports')}
                 className="p-2 hover:bg-gray-100 rounded-lg transition group"
               >
                 <ArrowLeft className="w-5 h-5 text-gray-600 group-hover:text-gray-900" />
@@ -196,7 +236,7 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Report Not Found</h2>
             <p className="text-gray-600 mb-8">{error || 'The report you are looking for does not exist.'}</p>
             <button
-              onClick={() => window.history.back()}
+              onClick={() => router.push('/admin/reports')}
               className="px-8 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium inline-flex items-center gap-2"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -387,6 +427,59 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
                 </div>
               </div>
             )}
+
+            {/* Admin Comments Section */}
+            <div className="bg-white rounded-3xl shadow-md p-8">
+              <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                </svg>
+                Admin Notes
+              </h3>
+
+              {/* Add Comment Form */}
+              <div className="mb-6 p-4 bg-blue-50 rounded-2xl">
+                <label className="block text-sm font-semibold text-gray-900 mb-3">Add a Note</label>
+                <textarea
+                  value={adminNote}
+                  onChange={(e) => setAdminNote(e.target.value)}
+                  placeholder="Add notes about this report (e.g., work completed, next steps, etc.)"
+                  className="w-full px-4 py-3 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900"
+                  rows={3}
+                />
+                <button
+                  onClick={handleAddComment}
+                  disabled={!adminNote.trim()}
+                  className="mt-3 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Add Note
+                </button>
+              </div>
+
+              {/* Comments List */}
+              {comments.length > 0 ? (
+                <div className="space-y-4">
+                  {comments.map((comment, index) => (
+                    <div key={index} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <p className="text-gray-900 text-sm">{comment.text}</p>
+                      <p className="text-xs text-gray-500 mt-2">
+                        {new Date(comment.timestamp).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-8 bg-gray-50 rounded-2xl text-center">
+                  <p className="text-gray-500">No notes yet. Add one to keep track of progress on this report.</p>
+                </div>
+              )}
+            </div>
 
             {/* Action Buttons */}
             <div className="flex gap-4 pt-6">
