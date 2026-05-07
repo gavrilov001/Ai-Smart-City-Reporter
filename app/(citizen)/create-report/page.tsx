@@ -18,64 +18,6 @@ interface ErrorNotification {
   message: string;
 }
 
-// Helper function to find best matching category - simplified for reliability
-function findBestMatchingCategory(
-  aiSuggestion: string,
-  categories: Array<{ id: string; name: string }>
-): { id: string; name: string } | undefined {
-  const suggestionLower = aiSuggestion.toLowerCase().trim();
-
-  // 1. Exact match (case-insensitive)
-  let match = categories.find(
-    cat => cat.name.toLowerCase() === suggestionLower
-  );
-  if (match) {
-    console.log('✅ Found exact match:', match.name);
-    return match;
-  }
-
-  // 2. Contains match
-  match = categories.find(
-    cat => suggestionLower.includes(cat.name.toLowerCase()) ||
-           cat.name.toLowerCase().includes(suggestionLower)
-  );
-  if (match) {
-    console.log('✅ Found contains match:', match.name);
-    return match;
-  }
-
-  // 3. Word match - split by common delimiters and check if any category contains the same words
-  const suggestionWords = suggestionLower.split(/[\s\/-]+/).filter(w => w.length > 2);
-  console.log('AI Suggestion words:', suggestionWords);
-  
-  let bestMatch: { id: string; name: string } | undefined = undefined;
-  let maxMatches = 0;
-
-  categories.forEach(cat => {
-    const catLower = cat.name.toLowerCase();
-    const catWords = catLower.split(/[\s\/-]+/).filter(w => w.length > 2);
-    
-    const matches = suggestionWords.filter(word =>
-      catWords.some(cw => cw === word || cw.includes(word) || word.includes(cw))
-    ).length;
-
-    if (matches > maxMatches) {
-      maxMatches = matches;
-      bestMatch = cat;
-      console.log(`Comparing "${suggestionWords.join(' ')}" with "${catWords.join(' ')}" = ${matches} matches`);
-    }
-  });
-
-  if (bestMatch) {
-    const matchName = (bestMatch as { id: string; name: string }).name;
-    console.log(`✅ Found word match: ${matchName} (${maxMatches} word(s))`);
-    return bestMatch;
-  }
-
-  console.warn('❌ No matching category found');
-  return undefined;
-}
-
 export default function CreateReportPage() {
   const [userProfile, setUserProfile] = useState({
     name: 'User',
@@ -97,17 +39,15 @@ export default function CreateReportPage() {
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [showManualCategoryPrompt, setShowManualCategoryPrompt] = useState(false);
   const [notification, setNotification] = useState<ErrorNotification | null>(null);
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  // AI suggestion state
-  const [aiSuggestion, setAiSuggestion] = useState<{
-    categoryName: string;
-    categoryId: string | null;
-    confidence: number;
-  } | null>(null);
 
   // Fetch user data from localStorage
   useEffect(() => {
@@ -159,61 +99,120 @@ export default function CreateReportPage() {
       ...prev,
       [name]: value,
     }));
+    // Clear manual category prompt when user selects a category
+    if (name === 'category' && value) {
+      setShowManualCategoryPrompt(false);
+    }
   };
 
-  const handleFileSelect = (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      showNotification('error', 'Please select a valid image file');
+  const handleFileSelect = (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    
+    // Validate all files
+    for (let file of fileArray) {
+      if (!file.type.startsWith('image/')) {
+        showNotification('error', `"${file.name}" is not a valid image file`);
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        showNotification('error', `"${file.name}" is larger than 5MB`);
+        return;
+      }
+    }
+
+    // Add files to the list (limit to 10 images)
+    const newFiles = [...selectedFiles, ...fileArray];
+    if (newFiles.length > 10) {
+      showNotification('error', 'Maximum 10 images allowed');
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      showNotification('error', 'Image size must be less than 5MB');
-      return;
+    setSelectedFiles(newFiles);
+
+    // Generate preview URLs
+    const newPreviews: string[] = [];
+    let loadedCount = 0;
+
+    fileArray.forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        newPreviews.push(reader.result as string);
+        loadedCount++;
+        if (loadedCount === fileArray.length) {
+          setPreviewUrls([...previewUrls, ...newPreviews]);
+          // Analyze the first image with AI to predict category
+          if (newFiles.length > 0) {
+            analyzeImageWithAI(reader.result as string);
+          }
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Keep first file as main for backward compatibility
+    if (newFiles.length > 0) {
+      setSelectedFile(newFiles[0]);
+      setPreviewUrl(previewUrls.length > 0 ? previewUrls[0] : '');
     }
-
-    setSelectedFile(file);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPreviewUrl(reader.result as string);
-    };
-    reader.readAsDataURL(file);
-
-    // Get AI suggestion from image immediately
-    analyzeImageForAI(file);
   };
 
-  const analyzeImageForAI = async (file: File) => {
+  const analyzeImageWithAI = async (imageBase64: string) => {
+    setIsAnalyzing(true);
+    setAnalysisProgress(0);
+
+    // Simulate progress animation
+    const progressInterval = setInterval(() => {
+      setAnalysisProgress((prev) => {
+        if (prev >= 90) return prev; // Stop at 90%, wait for actual response
+        return prev + Math.random() * 30;
+      });
+    }, 200);
+
     try {
-      const formData = new FormData();
-      formData.append('image', file);
-
-      const response = await axios.post('/api/reports/analyze-image', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      const response = await axios.post('/api/ai/classify-image', {
+        imageBase64,
+        categories,
+        timeout: 10000, // 10 second timeout
       });
 
-      if (response.data.aiPrediction) {
-        const prediction = response.data.aiPrediction;
-        console.log('AI Suggestion received:', prediction);
-        console.log('Available categories:', categories);
+      clearInterval(progressInterval);
+      setAnalysisProgress(100);
 
-        // Set the suggestion regardless of matching - user can accept or select from dropdown
-        setAiSuggestion({
-          categoryName: prediction.predictedCategory,
-          categoryId: null, // Will be looked up when user clicks Accept
-          confidence: prediction.confidence,
-        });
-
+      if (
+        response.data.status === 'success' &&
+        response.data.suggested_category
+      ) {
+        setFormData((prev) => ({
+          ...prev,
+          category: response.data.suggested_category,
+        }));
+        setShowManualCategoryPrompt(false);
         showNotification(
           'success',
-          `✨ AI detected: ${prediction.predictedCategory} (${Math.round(prediction.confidence * 100)}% confidence)`
+          `✨ Category auto-detected: ${response.data.suggested_label} (${Math.round(response.data.confidence * 100)}% confidence)`
+        );
+      } else {
+        // AI couldn't recognize the category
+        setShowManualCategoryPrompt(true);
+        showNotification(
+          'error',
+          '⚠️ Could not auto-detect category. Please select manually.'
         );
       }
+
+      // Clear animation after 1 second
+      setTimeout(() => {
+        setIsAnalyzing(false);
+        setAnalysisProgress(0);
+      }, 1000);
     } catch (error) {
+      clearInterval(progressInterval);
       console.error('Error analyzing image:', error);
-      // Don't show error - AI analysis is optional
+      setIsAnalyzing(false);
+      setAnalysisProgress(0);
+      setShowManualCategoryPrompt(true);
+      // Show prompt to manually select category
     }
   };
 
@@ -227,14 +226,14 @@ export default function CreateReportPage() {
     e.stopPropagation();
     const files = e.dataTransfer.files;
     if (files.length > 0) {
-      handleFileSelect(files[0]);
+      handleFileSelect(files);
     }
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.currentTarget.files;
     if (files && files.length > 0) {
-      handleFileSelect(files[0]);
+      handleFileSelect(files);
     }
   };
 
@@ -299,8 +298,8 @@ export default function CreateReportPage() {
       return;
     }
 
-    if (!selectedFile) {
-      showNotification('error', 'Please upload an image');
+    if (selectedFiles.length === 0) {
+      showNotification('error', 'Please upload at least one image');
       return;
     }
 
@@ -343,21 +342,23 @@ export default function CreateReportPage() {
       if (reportResponse.data.status === 'success') {
         const reportId = reportResponse.data.data.id;
 
-        // Upload image if report created successfully
-        if (selectedFile) {
-          const imageFormData = new FormData();
-          imageFormData.append('image', selectedFile);
-          imageFormData.append('report_id', reportId);
+        // Upload all images if report created successfully
+        if (selectedFiles.length > 0) {
+          for (let i = 0; i < selectedFiles.length; i++) {
+            const imageFormData = new FormData();
+            imageFormData.append('image', selectedFiles[i]);
+            imageFormData.append('report_id', reportId);
 
-          try {
-            await axios.post('/api/reports/upload-image', imageFormData, {
-              headers: {
-                'Content-Type': 'multipart/form-data',
-              },
-            });
-          } catch (imageError) {
-            console.error('Error uploading image:', imageError);
-            // Continue anyway - report was created
+            try {
+              await axios.post('/api/reports/upload-image', imageFormData, {
+                headers: {
+                  'Content-Type': 'multipart/form-data',
+                },
+              });
+            } catch (imageError) {
+              console.error(`Error uploading image ${i + 1}:`, imageError);
+              // Continue uploading other images even if one fails
+            }
           }
         }
 
@@ -372,6 +373,8 @@ export default function CreateReportPage() {
         });
         setSelectedFile(null);
         setPreviewUrl(null);
+        setSelectedFiles([]);
+        setPreviewUrls([]);
 
         showNotification('success', 'Report submitted successfully! Thank you for helping improve our city.');
 
@@ -690,10 +693,64 @@ export default function CreateReportPage() {
                 />
               </div>
 
-              {/* File Upload Dropzone */}
+              {/* Category */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-semibold text-slate-900">
+                    Category <span className="text-red-500">*</span>
+                  </label>
+                  {isAnalyzing && (
+                    <div className="flex items-center gap-2">
+                      <div className="inline-flex items-center">
+                        <svg className="animate-spin h-4 w-4 text-teal-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      </div>
+                      <span className="text-xs font-medium text-teal-600">Analyzing...</span>
+                    </div>
+                  )}
+                </div>
+                <select
+                  name="category"
+                  value={formData.category}
+                  onChange={handleInputChange}
+                  disabled={isLoading || isAnalyzing}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all disabled:opacity-50"
+                >
+                  <option value="">Select a category</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+                {isAnalyzing && (
+                  <div className="mt-2 h-1 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-teal-400 to-emerald-500 transition-all duration-300 rounded-full"
+                      style={{ width: `${Math.min(analysisProgress, 100)}%` }}
+                    ></div>
+                  </div>
+                )}
+                {showManualCategoryPrompt && !isAnalyzing && (
+                  <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
+                    <svg className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    <div>
+                      <p className="text-sm font-medium text-amber-800">Could not auto-detect category</p>
+                      <p className="text-xs text-amber-700 mt-1">Please select the appropriate category from the dropdown above based on the image content.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* File Upload Dropzone - Multiple Images */}
               <div>
                 <label className="block text-sm font-semibold text-slate-900 mb-2">
-                  Upload Image <span className="text-red-500">*</span>
+                  Upload Images <span className="text-red-500">*</span>
+                  <span className="text-xs font-normal text-gray-500 ml-2">(Up to 10 images)</span>
                 </label>
                 <div
                   onDragOver={handleDragOver}
@@ -705,29 +762,61 @@ export default function CreateReportPage() {
                     ref={fileInputRef}
                     type="file"
                     accept="image/*"
+                    multiple
                     onChange={handleFileInputChange}
                     disabled={isLoading}
                     className="hidden"
                   />
 
-                  {previewUrl ? (
+                  {previewUrls.length > 0 ? (
                     <div className="space-y-4">
-                      <img
-                        src={previewUrl}
-                        alt="Preview"
-                        className="w-full h-48 object-cover rounded-xl"
-                      />
-                      <button
-                        type="button"
-                        onClick={e => {
-                          e.stopPropagation();
-                          setSelectedFile(null);
-                          setPreviewUrl(null);
-                        }}
-                        className="w-full py-2 px-4 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors font-medium text-sm"
-                      >
-                        Remove Image
-                      </button>
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {previewUrls.map((url, index) => (
+                          <div key={index} className="relative group">
+                            <img
+                              src={url}
+                              alt={`Preview ${index + 1}`}
+                              className="w-full h-24 object-cover rounded-lg"
+                            />
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const newFiles = selectedFiles.filter((_, i) => i !== index);
+                                const newPreviews = previewUrls.filter((_, i) => i !== index);
+                                setSelectedFiles(newFiles);
+                                setPreviewUrls(newPreviews);
+                                if (newFiles.length > 0) {
+                                  setSelectedFile(newFiles[0]);
+                                  setPreviewUrl(newPreviews[0]);
+                                } else {
+                                  setSelectedFile(null);
+                                  setPreviewUrl(null);
+                                }
+                              }}
+                              className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center"
+                            >
+                              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                        {previewUrls.length < 10 && (
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              fileInputRef.current?.click();
+                            }}
+                            className="border-2 border-dashed border-gray-300 rounded-lg h-24 flex items-center justify-center cursor-pointer hover:bg-gray-100 transition"
+                          >
+                            <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600">{previewUrls.length} of 10 images selected</p>
                     </div>
                   ) : (
                     <div className="text-center">
@@ -745,113 +834,14 @@ export default function CreateReportPage() {
                         />
                       </svg>
                       <p className="text-slate-900 font-medium mb-1">
-                        Drag and drop your image here
+                        Drag and drop your images here
                       </p>
                       <p className="text-gray-500 text-sm">
-                        or click to browse (Max 5MB)
+                        or click to browse (Max 10 images, 5MB each)
                       </p>
                     </div>
                   )}
                 </div>
-              </div>
-
-              {/* Category */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-900 mb-2">
-                  Category <span className="text-red-500">*</span>
-                </label>
-
-                {/* AI Suggestion Card */}
-                {aiSuggestion && !formData.category && (
-                  <div className="mb-4 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-xl">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-slate-900 mb-1">
-                          ✨ AI Suggestion
-                        </p>
-                        <p className="text-emerald-700 font-semibold mb-3">
-                          {aiSuggestion.categoryName}
-                        </p>
-                        <p className="text-xs text-gray-600 mb-3">
-                          Confidence: {Math.round(aiSuggestion.confidence * 100)}%
-                        </p>
-                        <div className="space-y-3">
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                console.log('Accept clicked. aiSuggestion:', aiSuggestion);
-                                console.log('All available categories:', categories);
-                                const matchingCat = findBestMatchingCategory(aiSuggestion.categoryName, categories);
-                                console.log('Best match found:', matchingCat);
-                                
-                                if (matchingCat) {
-                                  console.log('✅ Setting category to:', matchingCat.id, matchingCat.name);
-                                  setFormData(prev => ({
-                                    ...prev,
-                                    category: matchingCat.id,
-                                  }));
-                                  showNotification('success', `✅ Category set to: ${matchingCat.name}`);
-                                  setAiSuggestion(null);
-                                } else {
-                                  console.warn('❌ Could not find exact match for:', aiSuggestion.categoryName);
-                                  console.warn('Available categories:', categories.map(c => `"${c.name}" (${c.id})`));
-                                  // Show the dropdown with the AI suggestion name visible so user can manually select the matching category
-                                  showNotification('success', `💡 AI suggests: "${aiSuggestion.categoryName}". Please select the matching category from dropdown.`);
-                                }
-                              }}
-                              className="flex-1 py-2 px-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors font-medium text-sm"
-                            >
-                              Accept
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                console.log('Dismiss clicked - showing category dropdown');
-                                setAiSuggestion(null);
-                              }}
-                              className="flex-1 py-2 px-3 bg-white text-emerald-700 border border-emerald-300 rounded-lg hover:bg-emerald-50 transition-colors font-medium text-sm"
-                            >
-                              Dismiss
-                            </button>
-                          </div>
-                          <p className="text-xs text-gray-500">Or select from dropdown below:</p>
-                          <select
-                            name="category"
-                            value={formData.category}
-                            onChange={handleInputChange}
-                            disabled={isLoading}
-                            className="w-full px-4 py-3 bg-white border border-emerald-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all disabled:opacity-50"
-                          >
-                            <option value="">Select a category</option>
-                            {categories.map(cat => (
-                              <option key={cat.id} value={cat.id}>
-                                {cat.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {(!aiSuggestion || formData.category) && (
-                  <select
-                    name="category"
-                    value={formData.category}
-                    onChange={handleInputChange}
-                    disabled={isLoading}
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all disabled:opacity-50"
-                  >
-                    <option value="">Select a category</option>
-                    {categories.map(cat => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
               </div>
 
               {/* Submit Button */}

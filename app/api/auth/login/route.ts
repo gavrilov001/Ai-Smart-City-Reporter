@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     // Get user from database
     const { data: user, error: userError } = await supabase
       .from('users')
-      .select('id, name, email, role')
+      .select('id, name, email, role, password')
       .eq('email', email)
       .single();
 
@@ -37,19 +37,25 @@ export async function POST(request: Request) {
       );
     }
 
-    // TODO: In production, implement proper password hashing (bcrypt, argon2, etc)
-    // For now, we'll use a simple hash. You should store hashed passwords in DB.
+    // Verify password
     const passwordHash = hashPassword(password);
     
-    // If you want to verify password against stored hash:
-    // const { data: authData } = await supabase
-    //   .from('users')
-    //   .select('password_hash')
-    //   .eq('id', user.id)
-    //   .single();
-    // if (!authData || authData.password_hash !== passwordHash) { ... }
+    // If user doesn't have a password (legacy account), store it on first login with password
+    if (!user.password) {
+      console.log(`Migrating user ${email} with password hash on first login`);
+      await supabase
+        .from('users')
+        .update({ password: passwordHash })
+        .eq('id', user.id);
+    } else if (user.password !== passwordHash) {
+      // If password exists and doesn't match, deny access
+      console.error('Invalid password for user:', email);
+      return NextResponse.json(
+        { message: 'Invalid email or password' },
+        { status: 401 }
+      );
+    }
 
-    // For MVP: accept any password (remove in production!)
     console.log(`User ${email} logged in successfully`);
 
     return NextResponse.json(

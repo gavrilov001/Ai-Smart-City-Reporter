@@ -50,10 +50,8 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
   });
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [comments, setComments] = useState<any[]>([]);
-  const [commentText, setCommentText] = useState('');
-  const [loadingComments, setLoadingComments] = useState(false);
-  const [submittingComment, setSubmittingComment] = useState(false);
+  const [adminNote, setAdminNote] = useState('');
+  const [comments, setComments] = useState<Array<{ text: string; timestamp: string }>>([]);
 
   useEffect(() => {
     const unwrapParams = async () => {
@@ -83,22 +81,28 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
   useEffect(() => {
     if (reportId) {
       fetchReportDetail();
-      fetchComments();
+      loadComments();
     }
   }, [reportId]);
 
-  const fetchComments = async () => {
+  const loadComments = () => {
     if (!reportId) return;
     try {
-      setLoadingComments(true);
-      const response = await axios.get(`/api/reports/${reportId}/comments`);
-      if (response.data.status === 'success') {
-        setComments(response.data.data || []);
+      const stored = localStorage.getItem(`report_comments_${reportId}`);
+      if (stored) {
+        setComments(JSON.parse(stored));
       }
-    } catch (error) {
-      console.error('Error fetching comments:', error);
-    } finally {
-      setLoadingComments(false);
+    } catch (e) {
+      console.error('Error loading comments:', e);
+    }
+  };
+
+  const saveComments = (newComments: Array<{ text: string; timestamp: string }>) => {
+    if (!reportId) return;
+    try {
+      localStorage.setItem(`report_comments_${reportId}`, JSON.stringify(newComments));
+    } catch (e) {
+      console.error('Error saving comments:', e);
     }
   };
 
@@ -175,35 +179,18 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
     }
   };
 
-  const handleAddComment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!reportId || !commentText.trim()) return;
+  const handleAddComment = () => {
+    if (!adminNote.trim()) return;
 
-    try {
-      setSubmittingComment(true);
-      const response = await axios.post(`/api/reports/${reportId}/comments`, {
-        comment: commentText.trim(),
-        admin_id: userProfile.id,
-      });
+    const newComment = {
+      text: adminNote,
+      timestamp: new Date().toISOString(),
+    };
 
-      if (response.data.status === 'success') {
-        setComments([...comments, response.data.data]);
-        setCommentText('');
-        setStatusMessage({
-          type: 'success',
-          text: 'Comment added successfully',
-        });
-        setTimeout(() => setStatusMessage(null), 3000);
-      }
-    } catch (error) {
-      console.error('Error adding comment:', error);
-      setStatusMessage({
-        type: 'error',
-        text: 'Failed to add comment. Please try again.',
-      });
-    } finally {
-      setSubmittingComment(false);
-    }
+    const updatedComments = [...comments, newComment];
+    setComments(updatedComments);
+    saveComments(updatedComments);
+    setAdminNote('');
   };
 
   return (
@@ -441,68 +428,57 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
               </div>
             )}
 
-            {/* Comments Section */}
+            {/* Admin Comments Section */}
             <div className="bg-white rounded-3xl shadow-md p-8">
-              <h3 className="text-2xl font-bold text-gray-900 mb-6">Resolution Notes</h3>
-              
+              <h3 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                </svg>
+                Admin Notes
+              </h3>
+
               {/* Add Comment Form */}
-              <form onSubmit={handleAddComment} className="mb-8">
-                <div className="space-y-4">
-                  <textarea
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    placeholder="Add a note about the resolution or updates..."
-                    disabled={submittingComment}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none resize-none disabled:opacity-50 disabled:cursor-not-allowed text-gray-900"
-                    rows={4}
-                  />
-                  <button
-                    type="submit"
-                    disabled={submittingComment || !commentText.trim()}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {submittingComment ? 'Posting...' : 'Post Note'}
-                  </button>
-                </div>
-              </form>
+              <div className="mb-6 p-4 bg-blue-50 rounded-2xl">
+                <label className="block text-sm font-semibold text-gray-900 mb-3">Add a Note</label>
+                <textarea
+                  value={adminNote}
+                  onChange={(e) => setAdminNote(e.target.value)}
+                  placeholder="Add notes about this report (e.g., work completed, next steps, etc.)"
+                  className="w-full px-4 py-3 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900"
+                  rows={3}
+                />
+                <button
+                  onClick={handleAddComment}
+                  disabled={!adminNote.trim()}
+                  className="mt-3 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Add Note
+                </button>
+              </div>
 
               {/* Comments List */}
-              <div className="space-y-4">
-                {loadingComments ? (
-                  <div className="text-center py-8">
-                    <div className="inline-flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                      <p className="text-gray-600">Loading notes...</p>
+              {comments.length > 0 ? (
+                <div className="space-y-4">
+                  {comments.map((comment, index) => (
+                    <div key={index} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <p className="text-gray-900 text-sm">{comment.text}</p>
+                      <p className="text-xs text-gray-500 mt-2">
+                        {new Date(comment.timestamp).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </p>
                     </div>
-                  </div>
-                ) : comments.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500">No resolution notes yet. Add one above.</p>
-                  </div>
-                ) : (
-                  comments.map((comment) => (
-                    <div key={comment.id} className="border border-blue-200 bg-white p-4 rounded-lg">
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <p className="font-semibold text-gray-900">
-                            {comment.admin?.name || 'Admin'}
-                          </p>
-                          <p className="text-xs text-gray-600">
-                            {new Date(comment.created_at).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </p>
-                        </div>
-                      </div>
-                      <p className="text-gray-800 whitespace-pre-wrap">{comment.comment}</p>
-                    </div>
-                  ))
-                )}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-8 bg-gray-50 rounded-2xl text-center">
+                  <p className="text-gray-500">No notes yet. Add one to keep track of progress on this report.</p>
+                </div>
+              )}
             </div>
 
             {/* Action Buttons */}

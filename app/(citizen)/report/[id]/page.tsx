@@ -5,18 +5,6 @@ import { useParams, useRouter } from 'next/navigation';
 import axios from 'axios';
 import Image from 'next/image';
 
-interface Comment {
-  id: string;
-  admin_id: string;
-  comment: string;
-  created_at: string;
-  admin?: {
-    id: string;
-    name: string;
-    email: string;
-  };
-}
-
 interface Report {
   id: string;
   title: string;
@@ -57,29 +45,25 @@ export default function ReportDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [loadingComments, setLoadingComments] = useState(false);
+  const [comments, setComments] = useState<Array<{ text: string; timestamp: string }>>([]);
 
   useEffect(() => {
     fetchReport();
   }, [reportId]);
 
-  const fetchComments = async () => {
+  const loadComments = () => {
     if (!reportId) return;
     try {
-      setLoadingComments(true);
-      const response = await axios.get(`/api/reports/${reportId}/comments`);
-      if (response.data.status === 'success') {
-        setComments(response.data.data || []);
+      const stored = localStorage.getItem(`report_comments_${reportId}`);
+      if (stored) {
+        setComments(JSON.parse(stored));
       }
-    } catch (error) {
-      console.error('Error fetching comments:', error);
-    } finally {
-      setLoadingComments(false);
+    } catch (e) {
+      console.error('Error loading comments:', e);
     }
   };
 
-  const fetchReport = async () => {
+      const fetchReport = async () => {
     try {
       setLoading(true);
       const response = await axios.get(`/api/reports`);
@@ -94,8 +78,8 @@ export default function ReportDetailPage() {
           if (foundReport.report_images && foundReport.report_images.length > 0) {
             setSelectedImage(foundReport.report_images[0].image_url);
           }
-          // Fetch comments after report is loaded
-          await fetchComments();
+          // Load comments after report is loaded
+          loadComments();
         } else {
           setError('Report not found');
         }
@@ -160,7 +144,7 @@ export default function ReportDetailPage() {
       <div className="min-h-screen bg-gray-50 p-4">
         <div className="max-w-4xl mx-auto">
           <button
-            onClick={() => window.location.href = '/my-reports'}
+            onClick={() => router.back()}
             className="flex items-center text-blue-600 hover:text-blue-800 mb-6"
           >
             <span className="mr-2">←</span>
@@ -185,7 +169,7 @@ export default function ReportDetailPage() {
       <div className="max-w-4xl mx-auto">
         {/* Back Button */}
         <button
-          onClick={() => window.location.href = '/my-reports'}
+          onClick={() => router.back()}
           className="flex items-center text-blue-600 hover:text-blue-800 mb-6 transition"
         >
           <span className="mr-2">←</span>
@@ -262,17 +246,43 @@ export default function ReportDetailPage() {
 
             {/* Description */}
             <div className="mb-8">
-              <h2 className="text-xl font-bold mb-3">Description</h2>
-              <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">
+              <h2 className="text-xl font-bold mb-3 text-gray-900">Description</h2>
+              <p className="text-gray-900 whitespace-pre-wrap leading-relaxed">
                 {report.description}
               </p>
             </div>
+
+            {/* Admin Comments Section */}
+            {comments.length > 0 && (
+              <div className="mb-8 p-6 bg-blue-50 rounded-lg border border-blue-200">
+                <h2 className="text-xl font-bold mb-4 text-gray-900">Admin Notes</h2>
+                <div className="space-y-4">
+                  {comments.map((comment, index) => (
+                    <div key={index} className="bg-white p-4 rounded-lg border border-blue-100">
+                      <div className="flex items-start justify-between mb-2">
+                        <span className="text-sm font-semibold text-blue-700">Administrator</span>
+                        <span className="text-xs text-gray-500">
+                          {new Date(comment.timestamp).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </div>
+                      <p className="text-gray-700 whitespace-pre-wrap">{comment.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Report Details Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
               {/* Category */}
               <div>
-                <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                   Category
                 </h3>
                 <p className="text-lg font-semibold text-gray-900">
@@ -287,7 +297,7 @@ export default function ReportDetailPage() {
 
               {/* Submitted By */}
               <div>
-                <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                   Submitted By
                 </h3>
                 <p className="text-lg font-semibold text-gray-900">
@@ -298,7 +308,7 @@ export default function ReportDetailPage() {
 
               {/* Location */}
               <div>
-                <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                   Location
                 </h3>
                 <p className="text-gray-900 font-medium">{report.address}</p>
@@ -312,7 +322,7 @@ export default function ReportDetailPage() {
               {/* Confidence Score */}
               {report.ai_confidence !== null && (
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">
+                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                     AI Confidence
                   </h3>
                   <div className="flex items-center gap-3">
@@ -331,7 +341,7 @@ export default function ReportDetailPage() {
 
               {/* Created Date */}
               <div>
-                <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                   Created
                 </h3>
                 <p className="text-gray-900">
@@ -341,7 +351,7 @@ export default function ReportDetailPage() {
 
               {/* Last Updated */}
               <div>
-                <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                   Last Updated
                 </h3>
                 <p className="text-gray-900">
@@ -350,40 +360,10 @@ export default function ReportDetailPage() {
               </div>
             </div>
 
-            {/* Resolution Notes Section */}
-            {comments && comments.length > 0 && (
-              <div className="mt-8 pt-8 border-t">
-                <h2 className="text-xl font-bold mb-6 text-gray-900">Resolution Updates</h2>
-                <div className="space-y-4">
-                  {comments.map((comment) => (
-                    <div key={comment.id} className="border-l-4 border-blue-600 bg-white p-5 rounded-lg shadow-sm">
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <p className="font-semibold text-gray-900">
-                            {comment.admin?.name || 'Administrator'}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {new Date(comment.created_at).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </p>
-                        </div>
-                      </div>
-                      <p className="text-gray-900 whitespace-pre-wrap leading-relaxed">{comment.comment}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Actions */}
             <div className="flex gap-4 pt-8 border-t">
               <button
-                onClick={() => window.location.href = '/my-reports'}
+                onClick={() => router.push('/my-reports')}
                 className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold"
               >
                 Back to My Reports

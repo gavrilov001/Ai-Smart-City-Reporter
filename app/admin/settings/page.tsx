@@ -52,6 +52,27 @@ export default function SettingsPage() {
         console.error('Error parsing user data:', e);
       }
     }
+
+    // Load saved settings from localStorage
+    const savedSettings = localStorage.getItem('platformSettings');
+    if (savedSettings) {
+      try {
+        const settings = JSON.parse(savedSettings);
+        setFormData(settings);
+      } catch (e) {
+        console.error('Error loading settings:', e);
+      }
+    }
+
+    const savedCategories = localStorage.getItem('reportCategories');
+    if (savedCategories) {
+      try {
+        const cats = JSON.parse(savedCategories);
+        setCategories(cats);
+      } catch (e) {
+        console.error('Error loading categories:', e);
+      }
+    }
   }, []);
 
   const handleLogout = () => {
@@ -63,13 +84,19 @@ export default function SettingsPage() {
 
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
+    // Save form data to localStorage
+    localStorage.setItem('platformSettings', JSON.stringify(formData));
+    localStorage.setItem('reportCategories', JSON.stringify(categories));
+    
     setSavedMessage('Settings saved successfully!');
     setTimeout(() => setSavedMessage(''), 3000);
   };
 
   const handleAddCategory = () => {
     if (newCategory.trim()) {
-      setCategories([...categories, newCategory.trim()]);
+      const updatedCategories = [...categories, newCategory.trim()];
+      setCategories(updatedCategories);
+      localStorage.setItem('reportCategories', JSON.stringify(updatedCategories));
       setNewCategory('');
       setSavedMessage('Category added successfully!');
       setTimeout(() => setSavedMessage(''), 3000);
@@ -77,7 +104,9 @@ export default function SettingsPage() {
   };
 
   const handleRemoveCategory = (index: number) => {
-    setCategories(categories.filter((_, i) => i !== index));
+    const updatedCategories = categories.filter((_, i) => i !== index);
+    setCategories(updatedCategories);
+    localStorage.setItem('reportCategories', JSON.stringify(updatedCategories));
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -130,6 +159,13 @@ export default function SettingsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 8.048M12 4.354L8.646 7.708m6.708 0L12 4.354m0 8.048l3.354 3.354m-6.708 0L5.646 12.402M12 20.5c-4.418 0-8-1.79-8-4s3.582-4 8-4 8 1.79 8 4-3.582 4-8 4z" />
             </svg>
             User Management
+          </a>
+
+          <a href="/admin/ai-assistant" className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg transition">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            AI Assistant
           </a>
         </nav>
 
@@ -276,12 +312,12 @@ export default function SettingsPage() {
                     name="maxReportSize"
                     value={formData.maxReportSize}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-gray-900"
                   >
-                    <option>5MB</option>
-                    <option>10MB</option>
-                    <option>25MB</option>
-                    <option>50MB</option>
+                    <option className="text-gray-900">5MB</option>
+                    <option className="text-gray-900">10MB</option>
+                    <option className="text-gray-900">25MB</option>
+                    <option className="text-gray-900">50MB</option>
                   </select>
                 </div>
               </div>

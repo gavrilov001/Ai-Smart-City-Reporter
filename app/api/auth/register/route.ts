@@ -70,6 +70,7 @@ export async function POST(request: Request) {
         id: userId,
         email,
         name,
+        password: passwordHash,
         role: role || 'citizen',
         email_verified: false,
         verification_token: hashedToken,
