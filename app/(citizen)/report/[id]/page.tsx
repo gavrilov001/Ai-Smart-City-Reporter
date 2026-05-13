@@ -34,6 +34,11 @@ interface Report {
     id: string;
     image_url: string;
     uploaded_at: string;
+    ai_analysis?: {
+      predictedCategory?: string;
+      confidence?: number;
+      rawLabel?: string;
+    };
   }>;
 }
 
@@ -269,7 +274,7 @@ export default function ReportDetailPage() {
         <header className="bg-white border-b border-gray-200 px-6 sm:px-8 py-6 sticky top-0 z-10">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 rounded-lg transition group">
+              <button onClick={() => router.push('/my-reports')} className="p-2 hover:bg-gray-100 rounded-lg transition group">
                 <ArrowLeft className="w-5 h-5 text-gray-600 group-hover:text-gray-900" />
               </button>
               <div>
@@ -488,17 +493,17 @@ export default function ReportDetailPage() {
                       )}
                     </div>
 
-                    {report.ai_confidence !== null && (
+                    {(report.report_images?.[0]?.ai_analysis?.confidence || report.ai_confidence) !== null && (
                       <div>
                         <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">AI Confidence</h3>
                         <div className="flex items-center gap-3">
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div
                               className="bg-blue-600 h-2 rounded-full"
-                              style={{ width: `${(report.ai_confidence || 0) * 100}%` }}
+                              style={{ width: `${(report.report_images?.[0]?.ai_analysis?.confidence || report.ai_confidence || 0) * 100}%` }}
                             ></div>
                           </div>
-                          <span className="text-lg font-semibold text-gray-900">{Math.round((report.ai_confidence || 0) * 100)}%</span>
+                          <span className="text-lg font-semibold text-gray-900">{Math.round((report.report_images?.[0]?.ai_analysis?.confidence || report.ai_confidence || 0) * 100)}%</span>
                         </div>
                       </div>
                     )}

@@ -13,7 +13,7 @@ export async function GET() {
         *,
         categories:category_id(id, name, description),
         users:user_id(id, name, email, role),
-        report_images(id, image_url, uploaded_at)
+        report_images(id, image_url, uploaded_at, ai_analysis)
         `
       )
       .order("created_at", { ascending: false });

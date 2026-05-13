@@ -16,6 +16,7 @@ interface Report {
   updated_at: string;
   image_url?: string;
   user_id: string;
+  ai_suggestion_confidence?: number | null;
   categories?: {
     id: string;
     name: string;
@@ -23,6 +24,10 @@ interface Report {
   report_images?: Array<{
     id: string;
     image_url: string;
+    ai_analysis?: {
+      confidence: number;
+      predictedCategory: string;
+    };
   }>;
 }
 
@@ -696,10 +701,20 @@ function ReportCard({ report }: ReportCardProps) {
             {/* Date */}
             <span className="text-gray-500">{formatDate(report.created_at)}</span>
 
-            {/* AI Confidence Placeholder */}
-            <span className="inline-block px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-              AI: {Math.floor(Math.random() * 40 + 60)}% confidence
-            </span>
+            {/* AI Confidence - Show actual confidence from report images */}
+            {report.report_images && report.report_images.length > 0 && report.report_images[0]?.ai_analysis?.confidence ? (
+              <span className="inline-block px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                AI: {Math.round(report.report_images[0].ai_analysis.confidence * 100)}% confidence
+              </span>
+            ) : report.ai_suggestion_confidence ? (
+              <span className="inline-block px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                AI: {Math.round(report.ai_suggestion_confidence * 100)}% confidence
+              </span>
+            ) : (
+              <span className="inline-block px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
+                AI: No analysis
+              </span>
+            )}
           </div>
         </div>
 
