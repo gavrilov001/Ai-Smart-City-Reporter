@@ -9,7 +9,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { role, name, email } = await request.json();
+    const { role, name, email, email_verified } = await request.json();
 
     // Build update object
     const updateData: any = {};
@@ -54,6 +54,20 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         );
       }
       updateData.email = email.trim();
+    }
+
+    // If email_verified is provided, validate and add it
+    if (email_verified !== undefined) {
+      if (typeof email_verified !== 'boolean') {
+        return NextResponse.json(
+          {
+            status: 'error',
+            message: 'email_verified must be a boolean',
+          },
+          { status: 400 }
+        );
+      }
+      updateData.email_verified = email_verified;
     }
 
     // Check if at least one field is being updated

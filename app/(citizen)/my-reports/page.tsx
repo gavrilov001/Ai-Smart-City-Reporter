@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 
 interface Report {
@@ -16,6 +16,7 @@ interface Report {
   updated_at: string;
   image_url?: string;
   user_id: string;
+  ai_suggestion_confidence?: number | null;
   categories?: {
     id: string;
     name: string;
@@ -23,6 +24,10 @@ interface Report {
   report_images?: Array<{
     id: string;
     image_url: string;
+    ai_analysis?: {
+      confidence: number;
+      predictedCategory: string;
+    };
   }>;
 }
 
@@ -36,12 +41,15 @@ interface UserProfile {
 type FilterType = 'all' | 'pending' | 'in_progress' | 'resolved';
 
 export default function MyReportsPage() {
+  const mountedRef = useRef(false);
+  
   const [userProfile, setUserProfile] = useState<UserProfile>({
     name: 'User',
     initials: '?',
     id: '',
     role: 'Citizen',
   });
+  const [userId, setUserId] = useState<string>('');
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   const [reports, setReports] = useState<Report[]>([]);
@@ -49,13 +57,20 @@ export default function MyReportsPage() {
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [error, setError] = useState<string | null>(null);
+  const lastFetchTimeRef = useRef<number>(0);
 
   // Fetch user data from localStorage
   useEffect(() => {
     const userStr = localStorage.getItem('user');
+    console.log('=== USER PROFILE INITIALIZATION ===');
+    console.log('User string from localStorage:', userStr);
+    
     if (userStr) {
       try {
         const user = JSON.parse(userStr);
+        console.log('Parsed user:', user);
+        console.log('User ID:', user.id);
+        
         const nameParts = user.email?.split('@')[0] || user.name || 'User';
         const initials = (user.name || nameParts)
           .split(' ')
@@ -70,42 +85,131 @@ export default function MyReportsPage() {
           id: user.id || '',
           role: 'Citizen',
         });
+        
+        // Store userId separately to ensure it's always available
+        if (user.id) {
+          console.log('Setting userId to:', user.id);
+          setUserId(user.id);
+        } else {
+          console.log('ERROR: user.id is empty!');
+        }
       } catch (e) {
         console.error('Error parsing user data:', e);
       }
+    } else {
+      console.log('ERROR: No user data in localStorage');
     }
   }, []);
 
   // Fetch reports from backend
-  useEffect(() => {
-    const fetchReports = async () => {
-      try {
-        setLoading(true);
+  const fetchReports = useCallback(async () => {
+    console.log('=== FETCH REPORTS CALLED ===');
+    console.log('Current userId:', userId);
+    
+    try {
+      setLoading(true);
+      setError(null);
+      lastFetchTimeRef.current = Date.now();
+
+      console.log('Making API call to /api/reports');
+      const response = await axios.get('/api/reports');
+      console.log('API Response:', response.data);
+
+      if (response.data.status === 'success' && response.data.data) {
+        console.log('Total reports from API:', response.data.data.length);
+        
+        // Filter reports to only show the logged-in user's reports
+        const userReports = response.data.data.filter(
+          (report: Report) => {
+            const match = report.user_id === userId;
+            console.log(`Checking report ${report.id}: user_id=${report.user_id}, userId=${userId}, match=${match}`);
+            return match;
+          }
+        );
+        
+        console.log('Filtered user reports:', userReports.length);
+        setReports(userReports);
         setError(null);
+      } else {
+        console.log('API response status not success:', response.data.status);
+        setError('Failed to fetch reports');
+      }
+    } catch (err) {
+      console.error('Error fetching reports:', err);
+      setError('Failed to load reports. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  }, [userId]);
 
-        const response = await axios.get('/api/reports');
+  useEffect(() => {
+    console.log('=== PAGE MOUNTED ===');
+    mountedRef.current = true;
+    
+    return () => {
+      console.log('=== PAGE UNMOUNTING ===');
+      mountedRef.current = false;
+    };
+  }, []);
 
-        if (response.data.status === 'success' && response.data.data) {
-          // Filter reports to only show the logged-in user's reports
-          const userReports = response.data.data.filter(
-            (report: Report) => report.user_id === userProfile.id
-          );
-          setReports(userReports);
-        } else {
-          setError('Failed to fetch reports');
-        }
-      } catch (err) {
-        console.error('Error fetching reports:', err);
-        setError('Failed to load reports. Please try again later.');
-      } finally {
-        setLoading(false);
+  useEffect(() => {
+    console.log('=== EFFECT: userId changed ===');
+    console.log('New userId:', userId);
+    console.log('Page mounted?', mountedRef.current);
+    
+    if (userId && mountedRef.current) {
+      console.log('Fetching reports for user:', userId);
+      fetchReports();
+    } else {
+      console.log('WARNING: userId is empty or page not mounted, not fetching');
+    }
+  }, [userId, fetchReports]);
+
+  // Refetch reports when page regains focus
+  useEffect(() => {
+    console.log('=== SETTING UP FOCUS/VISIBILITY LISTENERS ===');
+    
+    const handleFocus = () => {
+      console.log('PAGE REGAINED FOCUS - Force refetch!');
+      if (userId) {
+        fetchReports();
       }
     };
 
-    if (userProfile.id) {
-      fetchReports();
-    }
-  }, [userProfile.id]);
+    // Also refetch on page visibility change (when tab becomes active)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && userId) {
+        console.log('PAGE BECAME VISIBLE - Force refetch!');
+        fetchReports();
+      }
+    };
+
+    // Also listen for beforeunload/unload to ensure fresh data
+    const handlePageShow = (event: PageTransitionEvent) => {
+      console.log('PAGE SHOWN (browser back button) - persisted:', event.persisted);
+      console.log('Time since last fetch:', Date.now() - lastFetchTimeRef.current, 'ms');
+      
+      // Always refetch on pageshow, especially after navigation
+      if (userId) {
+        console.log('FORCING REFETCH on pageshow!');
+        setLoading(true);
+        setReports([]); // Clear old data immediately
+        setTimeout(() => {
+          fetchReports();
+        }, 0); // Queue the fetch
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pageshow', handlePageShow);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pageshow', handlePageShow);
+    };
+  }, [fetchReports, userId]);
 
   // Filter reports based on active filter
   useEffect(() => {
@@ -597,10 +701,20 @@ function ReportCard({ report }: ReportCardProps) {
             {/* Date */}
             <span className="text-gray-500">{formatDate(report.created_at)}</span>
 
-            {/* AI Confidence Placeholder */}
-            <span className="inline-block px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-              AI: {Math.floor(Math.random() * 40 + 60)}% confidence
-            </span>
+            {/* AI Confidence - Show actual confidence from report images */}
+            {report.report_images && report.report_images.length > 0 && report.report_images[0]?.ai_analysis?.confidence ? (
+              <span className="inline-block px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                AI: {Math.round(report.report_images[0].ai_analysis.confidence * 100)}% confidence
+              </span>
+            ) : report.ai_suggestion_confidence ? (
+              <span className="inline-block px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                AI: {Math.round(report.ai_suggestion_confidence * 100)}% confidence
+              </span>
+            ) : (
+              <span className="inline-block px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
+                AI: No analysis
+              </span>
+            )}
           </div>
         </div>
 

@@ -44,6 +44,7 @@ export default function CreateReportPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [showManualCategoryPrompt, setShowManualCategoryPrompt] = useState(false);
   const [notification, setNotification] = useState<ErrorNotification | null>(null);
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -98,6 +99,10 @@ export default function CreateReportPage() {
       ...prev,
       [name]: value,
     }));
+    // Clear manual category prompt when user selects a category
+    if (name === 'category' && value) {
+      setShowManualCategoryPrompt(false);
+    }
   };
 
   const handleFileSelect = (files: FileList | File[]) => {
@@ -182,9 +187,17 @@ export default function CreateReportPage() {
           ...prev,
           category: response.data.suggested_category,
         }));
+        setShowManualCategoryPrompt(false);
         showNotification(
           'success',
           `✨ Category auto-detected: ${response.data.suggested_label} (${Math.round(response.data.confidence * 100)}% confidence)`
+        );
+      } else {
+        // AI couldn't recognize the category
+        setShowManualCategoryPrompt(true);
+        showNotification(
+          'error',
+          '⚠️ Could not auto-detect category. Please select manually.'
         );
       }
 
@@ -198,7 +211,8 @@ export default function CreateReportPage() {
       console.error('Error analyzing image:', error);
       setIsAnalyzing(false);
       setAnalysisProgress(0);
-      // Silently fail - AI analysis is optional
+      setShowManualCategoryPrompt(true);
+      // Show prompt to manually select category
     }
   };
 
@@ -717,6 +731,17 @@ export default function CreateReportPage() {
                       className="h-full bg-gradient-to-r from-teal-400 to-emerald-500 transition-all duration-300 rounded-full"
                       style={{ width: `${Math.min(analysisProgress, 100)}%` }}
                     ></div>
+                  </div>
+                )}
+                {showManualCategoryPrompt && !isAnalyzing && (
+                  <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
+                    <svg className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    <div>
+                      <p className="text-sm font-medium text-amber-800">Could not auto-detect category</p>
+                      <p className="text-xs text-amber-700 mt-1">Please select the appropriate category from the dropdown above based on the image content.</p>
+                    </div>
                   </div>
                 )}
               </div>
